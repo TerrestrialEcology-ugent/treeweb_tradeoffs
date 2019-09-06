@@ -1,10 +1,20 @@
-# Spatial synthesis analysis of Treeweb data
+# Trade-offs synthesis analysis of Treeweb data
 
 ## Aim
 
-The aim of the analysis is to compare the importance of tree composition, tree richness and fragmentation on multiple ecosystem functions. The idea is to use variance partitioning approaches following Gelman and Hill 2007 and also Ratcliffe 2017. Fragmentation effect is divided into isolation effect (quantified via a proximity index) and edge effects (quantified via edge length within 100m of the plot).
+Explore and try to find ways to optimize forest management in the face of trade-offs and synergies between multiple ecosystem functions and the diversity of multiple taxa.
 
-## Repo use
+## Note on reproducability
 
-* The scripts to run the analysis and create the figures are in the script/ subfolder
+* Running the R script "scripts/tradeoffs_script.r" should: (i) run the model, (ii) produce the main figures from the submitted manuscript
+* make sure that all needed package are installed, this code was run with:
+  * R v3.6.1
+  * brms v2.8.0
+  * plyr v1.8.4
+  * dplyr v0.8.3
+  * ggplot2 v3.2.1
+  * fmsb v0.6.3
+
+other package versions may lead to deviation in results.
+
 
