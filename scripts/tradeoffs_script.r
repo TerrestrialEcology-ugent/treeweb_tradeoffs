@@ -5,6 +5,7 @@
 ################################################
 
 # set wd
+# setwd("PostDoc_Ghent/Spatialsynthesis_stuff/")
 
 # load libraries
 library(plyr)
@@ -18,6 +19,9 @@ library(viridis) # for nice colors
 
 # load data
 brm_dat <- read.csv("data/tradeoffs_data.csv")
+
+# load helper functions
+source("scripts/tradeoffs_function.r")
 
 # fit the model
 m_mult <- brm(mvbind(C.stock,Decomp,Biomass,P.germ,Herbivory,Predation,Bird.smi,frass,Sha.veg,Sha.herb,Sha.cara,Sha.spider,Sha.iso,Sha.dip,Sha.bird,Sha.bat)
@@ -68,7 +72,7 @@ rescor_null %>%
   mutate(From = factor(From, levels = ord), To = factor(To, levels = ord)) %>% # re-ordering of the labels
   mutate(label = ifelse(Res == "Y_Y",sprintf("underline(%s)",round(R,2)),round(R,2))) %>% # if intrisic correlation underline
   mutate(label = ifelse(Res == "Y_N", sprintf("italic('%s')",round(R,2)), label)) %>% # if extrinsic correlation italized
-  mutate(size = ifelse(Res %in% c("Y_N","Y_Y"), 2, 1)) %>%
+  mutate(size = ifelse(Res %in% c("Y_N","Y_Y"), 2, 1)) %>% # bigger plotting size if correlation present
   mutate(type_f = ifelse(From %in% fun, "function","diversity"),
          type_t = ifelse(To %in% fun, "function","diversity")) %>%
   unite("type",c(type_f,type_t),sep="_") %>%
@@ -82,7 +86,7 @@ rescor_null %>%
                             Shaveg = "Vegetation", Shaherb = "Herbivore", Shacara = "Carabid", Shaspider = "Spider", Shaiso = "Isopod", Shadip = "Diplopod", Shabird = "Bird", Shabat = "Bat"))) %>%
   mutate(type = revalue(type, c(diversity_diversity = "a) Diversity - Diversity", function_function = "b) Function - Function", function_diversity = "c) Function - Diversity"))) -> obs_dd
 
-## the plot
+## the plot, note that the values may slightly differ from the published version due to stochastic sampling in the model
 gg_cor <- ggplot(obs_dd,aes(x=From,y=To,fill=color)) +
   geom_tile() +
   geom_text(aes(label = label, size = size), parse = TRUE, show.legend = FALSE) +
@@ -106,12 +110,13 @@ pred_comp <- posterior_linpred(m_mult, newdata = newdat)
 pred_comp <- adply(pred_comp,c(2,3),quantile, probs=c(0.1,0.5,0.9)) # derive median and 80% credible interval
 pred_comp$speccomb <- rep(c("fsyl","qrob","qrub","all"), 16)
 names(pred_comp)[3:5] <- c("LCI","Median","UCI")
-tmp <- melt(pred_comp, id.vars = c(2,6),measure.vars = 3:5) # put to long format
+tmp <- pivot_longer(pred_comp, 3:5, names_to = "id", values_to = "value") # put to long format
 
 # data re-arranging for functions
-pred_r <- dcast(tmp[c(1:32,65:96,129:160),],speccomb + variable ~ X2, value.var = "value")
-rownames(pred_r) <- paste(pred_r$speccomb,pred_r$variable)
-pred_r <- pred_r[,-c(1,2)]
+pred_r <- as.data.frame(pivot_wider(tmp[1:96,], names_from = "X2", values_from = "value"))
+
+rownames(pred_r) <- paste(pred_r$speccomb,pred_r$id)
+pred_r <- pred_r[,-c(1:3)]
 pred_r <- rbind(rep(1.75, 8), rep(-1.75,8),rep(0,8), pred_r) # these values are the min, max and average line in the plot
 colnames(pred_r) <- c("C stock", "Decomposition", "Tree\nbiom.", "Regeneration", "Herbivory", "Predation", "Bird\nbiom.", "Insect biomass")
 pred_r <- pred_r[,c(1:4, 8, 5, 7, 6)] # column re-ordering
@@ -119,9 +124,9 @@ pred_r <- pred_r[,c(1:4, 8, 5, 7, 6)] # column re-ordering
 
 
 # now for diversity
-pred_d <- dcast(tmp[c(33:64,97:128,161:192),],speccomb + variable ~ X2, value.var = "value")
-rownames(pred_d) <- paste(pred_d$speccomb,pred_d$variable)
-pred_d <- pred_d[,-c(1,2)]
+pred_d <- as.data.frame(pivot_wider(tmp[97:192,], names_from = "X2", values_from = "value"))
+rownames(pred_d) <- paste(pred_d$speccomb,pred_d$id)
+pred_d <- pred_d[,-c(1:3)]
 pred_d <- rbind(rep(1.75, 8), rep(-1.75,8),rep(0,8), pred_d)
 colnames(pred_d) <- c("Vegetation", "Herbivore", "Cara.", "Spider", "Isopod", "Diplopod", "Bird", "Bat")
 
@@ -146,7 +151,7 @@ par(mar = c(0,0,0,0))
 plot(1, type = "n", axes = FALSE, xlab="",ylab="")
 
 
-legend("top", legend = c("all", "fsyl", "qrob", "qrub"), bty = "n", col = viridis(4), pch = 16, lty = 1, lwd = 4, horiz = TRUE,
+legend("top", legend = c("fsyl", "qrob", "qrub","all"), bty = "n", col = viridis(4), pch = 16, lty = 1, lwd = 4, horiz = TRUE,
        title = "Tree composition", cex = 1.5)
 
 dev.off()
