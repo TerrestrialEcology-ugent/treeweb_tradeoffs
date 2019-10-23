@@ -1,5 +1,7 @@
 # Trade-offs synthesis analysis of Treeweb data
 
+[![DOI](https://zenodo.org/badge/204004922.svg)](https://zenodo.org/badge/latestdoi/204004922)
+
 ## Aim
 
 Explore and try to find ways to optimize forest management in the face of trade-offs and synergies between multiple ecosystem functions and the diversity of multiple taxa.
