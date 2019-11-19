@@ -315,5 +315,5 @@ gg_land <- ggplot(dd_all,aes(x=X,y=Median, ymin = LCI, ymax = UCI, color = fragm
 
 gg_desirab <- grid.arrange(gg_plot, gg_land, bottom = "Tree species composition", widths = c(6.5, 8.5))
 
-ggsave("figures/03_desirab.png", gg_desirab)
+ggsave("figures/03_desirab2.png", gg_desirab, width = 7.7, height = 6)
 
