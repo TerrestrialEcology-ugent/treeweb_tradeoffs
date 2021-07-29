@@ -7,6 +7,9 @@
 # set wd
 # setwd("PostDoc_Ghent/Spatialsynthesis_stuff/")
 
+# set a seed
+set.seed(20210101)
+
 # load libraries
 library(plyr)
 library(tidyverse)
