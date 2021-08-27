@@ -5,7 +5,7 @@
 ################################################
 
 # set wd
-# setwd("PostDoc_Ghent/Spatialsynthesis_stuff/")
+setwd("PostDoc_Ghent/Spatialsynthesis_stuff/")
 
 # set a seed
 set.seed(20210101)
@@ -32,7 +32,44 @@ m_mult <- brm(mvbind(C.stock,Decomp,Biomass,P.germ,Herbivory,Predation,Bird.smi,
               prior = set_prior("normal(0, 2)", class = "b"), data = brm_dat)
 
 
-# 1. trade-offs, Fig. in SI
+# 1. percent of explained deviance
+
+# grab the names of the variables
+nn <- names(brm_dat)[2:17]
+nn <- gsub("\\.","",nn)
+# reorder the variables
+nn <- nn[c(1:4,8,5,7,6,9:16)]
+# grab the posterior samples
+post <- posterior_samples(m_mult)
+# compute the residuals and their sd
+residd <- residuals(m_mult, summary = FALSE)
+resid_all <- apply(residd, c(1,3), sd)
+# apply the get_sd function to all variables
+sd_all <- ldply(nn, function(n) get_sd(post, n))
+
+# get the across variables average explained variance
+sd_all %>%
+  group_by(fraction) %>%
+  summarise(estimate = mean(estimate)) -> sd_avg
+# nicer variable labels
+lbls <- c("C. stock", "Decomposition", "Tree biomass", "Regeneration", "Insect biomass", "Herbivory", "Bird biomass", "Predation",
+          "Vegetation div.", "Herbivore div.", "Carabid div.", "Spider div.", "Isopod div.", "Diplopod div.", "Bird div.", "Bat div.")
+# the plot
+gg_sd <- ggplot(sd_all,aes(x= variable, y = estimate, ymin = conf.low, ymax = conf.high, color = fraction,
+                           group = fraction)) +
+  geom_linerange(position = position_dodge(width = 0.5)) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  coord_flip() +
+  scale_x_discrete( labels = lbls) +
+  geom_hline(data = sd_avg, aes(yintercept = estimate, color = fraction), linetype = "dashed") +
+  labs(x="", y = "Percentage of explained variance") +
+  scale_color_discrete(name = "Effects") +
+  theme_classic() 
+
+ggsave("figures/01_explained.pdf", gg_sd, width = 80, height = 70, units = "mm",
+       dpi = 600, scale = 2.25)
+
+# 2. trade-offs, Fig. 2
 
 ## grab the residual correlation from the fitted model
 pp_mult <- posterior_samples(m_mult)
@@ -94,165 +131,18 @@ gg_cor <- ggplot(obs_dd,aes(x=From,y=To,fill=color)) +
   geom_tile() +
   geom_text(aes(label = label, size = size), parse = TRUE, show.legend = FALSE) +
   scale_fill_identity() +
-  facet_wrap(~type,scales = "free", ncol = 1) +
+  facet_wrap(~type,scales = "free", ncol = 3) +
   scale_size(range = c(2,4)) +
   labs(x = "", y = "") +
   theme(panel.background = element_blank(), axis.text.x = element_text(angle = 45,hjust = 1),
         strip.background = element_blank(), axis.ticks = element_blank()) 
 
 
-ggsave("figures/tradeoffs.png",gg_cor,width=7, height = 10)
+ggsave("figures/02_tradeoffs.pdf",gg_cor,width=180, height = 60, units = "mm", dpi = 600,
+       scale = 1.75)
 
 
-# 2. Response to individual drivers, Fig. 1 in main document
-
-## 2.1 effect of tree species composition, under average edge habitat amount, proximity and tree density
-newdat <- data.frame(speccomb = c("fsyl", "qrob", "qrub", "all"), edge.std = 0, prox.std = 0, dens.std = 0)
-# get model predictions
-pred_comp <- posterior_linpred(m_mult, newdata = newdat)
-pred_comp <- adply(pred_comp,c(2,3),quantile, probs=c(0.1,0.5,0.9)) # derive median and 80% credible interval
-pred_comp$speccomb <- rep(c("fsyl","qrob","qrub","all"), 16)
-names(pred_comp)[3:5] <- c("LCI","Median","UCI")
-tmp <- pivot_longer(pred_comp, 3:5, names_to = "id", values_to = "value") # put to long format
-
-# data re-arranging for functions
-pred_r <- as.data.frame(pivot_wider(tmp[1:96,], names_from = "X2", values_from = "value"))
-
-rownames(pred_r) <- paste(pred_r$speccomb,pred_r$id)
-pred_r <- pred_r[,-c(1:3)]
-pred_r <- rbind(rep(1.75, 8), rep(-1.75,8),rep(0,8), pred_r) # these values are the min, max and average line in the plot
-colnames(pred_r) <- c("C stock", "Decomposition", "Tree\nbiom.", "Regeneration", "Herbivory", "Predation", "Bird\nbiom.", "Insect biomass")
-pred_r <- pred_r[,c(1:4, 8, 5, 7, 6)] # column re-ordering
-
-
-
-# now for diversity
-pred_d <- as.data.frame(pivot_wider(tmp[97:192,], names_from = "X2", values_from = "value"))
-rownames(pred_d) <- paste(pred_d$speccomb,pred_d$id)
-pred_d <- pred_d[,-c(1:3)]
-pred_d <- rbind(rep(1.75, 8), rep(-1.75,8),rep(0,8), pred_d)
-colnames(pred_d) <- c("Vegetation", "Herbivore", "Cara.", "Spider", "Isopod", "Diplopod", "Bird", "Bat")
-
-cols_border <- c("black",rep(viridis(4),each=3))
-cols_in <- NA
-
-# the plot
-png("figures/spid_comp.png", width = 1200, height = 800)
-m <- matrix(c(1, 2, 3, 3), ncol = 2, byrow = TRUE)
-layout(m, heights = c(0.8, 0.2))
-
-par(mar = c(1,1,1,1), cex = 1.5)
-radarchart(pred_r, axistype = 1, pcol = cols_border, pfcol = cols_in, plwd = c(4,rep(c(2,4,2),8)), plty = c(1,rep(c(2,1,2),8)),pty = c(NA,rep(c(NA,16,NA),8)),
-           cglcol = "grey", cglty = 1, axislabcol = "black", caxislabels = seq(-1.5, 1.5, length = 5), cglwd = 0.8,vlcex = 1,
-           title = "Ecosystem function")
-
-radarchart(pred_d, axistype = 1, pcol = cols_border, pfcol = cols_in, plwd = c(4,rep(c(2,4,2),8)), plty = c(1,rep(c(2,1,2),8)),pty = c(NA,rep(c(NA,16,NA),8)),
-           cglcol = "grey", cglty = 1, axislabcol = "black", caxislabels = seq(-1.5, 1.5, length = 5), cglwd = 0.8, vlcex = 1,
-           title = "Diversity")
-par(mar = c(0,0,0,0))
-
-plot(1, type = "n", axes = FALSE, xlab="",ylab="")
-
-
-legend("top", legend = c("fsyl", "qrob", "qrub","all"), bty = "n", col = viridis(4), pch = 16, lty = 1, lwd = 4, horiz = TRUE,
-       title = "Tree composition", cex = 1.5)
-
-dev.off()
-
-## 2.2 effect of amount of edge habitat averaging over tree composition effect
-newdat <- expand.grid(speccomb = c("fsyl","qrob","qrub","all"), edge.std = c(-1.2, 2), prox.std = 0, dens.std = 2.5)
-
-pred_e <- posterior_linpred(m_mult, newdata = newdat)
-pred_e2 <- adply(pred_e,c(1,3), function(x) data.frame(Low = mean(x[1:4]), High = mean(x[5:8]))) # average over tree composition
-pred_e2 %>%
-  group_by(X2) %>%
-  summarise(LowM = median(Low), HighM = median(High), LowLCI = quantile(Low, probs = 0.1), HighLCI = quantile(High,probs = 0.1), 
-            LowUCI = quantile(Low, probs = 0.9), HighUCI = quantile(High,probs = 0.9)) -> pred_e3
-# formatting for function
-pred_f <- t(pred_e3[1:8,2:7])
-colnames(pred_f) <- c("C stock", "Decomposition", "Tree\nbiom.", "Regeneration","Herbivory","Predation","Bird\nbiom.", "Insect biomass")
-pred_f <- as.data.frame(rbind(rep(1.25,8),rep(-1.25,8),rep(0,8),pred_f))
-pred_f <- pred_f[,c(1:4, 8, 5, 7, 6)]
-# formatting for diversity
-pred_d <- t(pred_e3[9:16,2:7])
-colnames(pred_d) <- c("Vegetation", "Herbivore", "Cara.", "Spider","Isopod","Diplopod","Bird", "Bat")
-pred_d <- as.data.frame(rbind(rep(1.25,8),rep(-1.25,8),rep(0,8),pred_d))
-
-cols_bordere <- c("black",rep(c("orange","royalblue"),3))
-cols_ine <- NA
-
-png("figures/spid_edge.png", width = 1200, height = 800)
-m <- matrix(c(1, 2, 3, 3), ncol = 2, byrow = TRUE)
-layout(m, heights = c(0.8, 0.2))
-
-par(mar = c(1,1,1,1), cex = 1.5)
-
-radarchart(pred_f, axistype = 1, pcol = cols_bordere, pfcol = cols_ine, plwd = c(4,4,4,2,2,2,2), plty = c(1,1,1,2,2,2,2), pty = c(NA,16,16,NA,NA,NA,NA),
-           cglcol = "grey", cglty = 1, axislabcol = "black", caxislabels = seq(-1.25, 1.25, length = 5), cglwd = 1,vlcex = 1,
-           title = "")
-
-radarchart(pred_d, axistype = 1, pcol = cols_bordere, pfcol = cols_ine, plwd = c(4,4,4,2,2,2,2), plty = c(1,1,1,2,2,2,2),pty = c(NA,16,16,NA,NA,NA,NA),
-           cglcol = "grey", cglty = 1, axislabcol = "black", caxislabels = seq(-1.25, 1.25, length = 5), cglwd = 1,vlcex = 1,
-           title = "")
-
-par(mar = c(0,0,0,0))
-
-plot(1, type = "n", axes = FALSE, xlab="",ylab="")
-
-
-legend("top", legend = c("Low", "High"), bty = "n", col = cols_bordere[2:3], pch = 16, lty = 1, lwd = 4, horiz = TRUE,
-       title = "Amount of edges:",cex=1.5)
-
-dev.off()
-
-## 2.3 now for the effect of proximity
-newdat <- expand.grid(speccomb = c("fsyl","qrob","qrub","all"), edge.std = 0, prox.std = c(-1.5, 3.5), dens.std = 0)
-# deriving the predictions
-pred_p <- posterior_linpred(m_mult, newdata = newdat)
-pred_p2 <- adply(pred_p,c(1,3), function(x) data.frame(Low = mean(x[1:4]), High = mean(x[5:8]))) # averaging over tree species composition
-pred_p2 %>%
-  group_by(X2) %>%
-  summarise(LowM = median(Low), HighM = median(High), LowLCI = quantile(Low, probs = 0.1), HighLCI = quantile(High,probs = 0.1), 
-            LowUCI = quantile(Low, probs = 0.9), HighUCI = quantile(High,probs = 0.9)) -> pred_p3
-# formatting for functions
-pred_f <- t(pred_p3[1:8,2:7])
-colnames(pred_f) <- c("C stock", "Decomposition", "Tree\nbiom.", "Regeneration","Herbivory","Predation","Bird\nbiom.", "Insect biomass")
-pred_f <- as.data.frame(rbind(rep(3,8),rep(-3,8),rep(0,8),pred_f))
-pred_f <- pred_f[,c(1:4, 8, 5, 7, 6)]
-# formatting for diversity
-pred_d <- t(pred_p3[9:16,2:7])
-colnames(pred_d) <- c("Vegetation", "Herbivore", "Cara.", "Spider","Isopod","Diplopod","Bird", "Bat")
-pred_d <- as.data.frame(rbind(rep(3,8),rep(-3,8),rep(0,8),pred_d))
-
-cols_borderp <- c("black",rep(c("peru","slateblue"),3))
-cols_inp <- NA
-
-png("figures/spid_prox.png", width = 1200, height = 800)
-m <- matrix(c(1, 2, 3, 3), ncol = 2, byrow = TRUE)
-layout(m, heights = c(0.8, 0.2))
-
-par(mar = c(1,1,1,1), cex = 1.5)
-
-radarchart(pred_f, axistype = 1, pcol = cols_borderp, pfcol = cols_inp, plwd = c(4,4,4,2,2,2,2), plty = c(1,1,1,2,2,2,2), pty = c(NA,16,16,NA,NA,NA,NA),
-           cglcol = "grey", cglty = 1, axislabcol = "black", caxislabels = seq(-3, 3, length = 5), cglwd = 1,vlcex = 1,
-           title = "")
-
-radarchart(pred_d, axistype = 1, pcol = cols_borderp, pfcol = cols_inp, plwd = c(4,4,4,2,2,2,2), plty = c(1,1,1,2,2,2,2),pty = c(NA,16,16,NA,NA,NA,NA),
-           cglcol = "grey", cglty = 1, axislabcol = "black", caxislabels = seq(-3, 3, length = 5), cglwd = 1,vlcex = 1,
-           title = "")
-
-par(mar = c(0,0,0,0))
-
-plot(1, type = "n", axes = FALSE, xlab="",ylab="")
-
-
-legend("top", legend = c("Low", "High"), bty = "n", col = cols_borderp[2:3], pch = 16, lty = 1, lwd = 4, horiz = TRUE,
-       title = "Proximity to other forest fragments:",cex=1.5)
-
-dev.off()
-
-
-# 3. Desirability, Fig. 2 in main document
+# 3. Desirability, Fig. 3
 
 ## read-in importance score, note you can create your own !!
 imp <- read.csv("data/importance_score.csv")
@@ -304,7 +194,7 @@ dd_f$perspective <- "productivist"
 dd_c$perspective <- "conservationist"
 # combine the two perspectives
 dd_all <- rbind(dd_f,dd_c)
-## come cleaning up before plot
+## some cleaning up before plot
 dd_all <- separate(dd_all, ".id", c("tree_composition", "fragmentation"), sep = "\n")
 dd_all$X <- rep(1:2, each = 2) + rep(c(-0.15, 0.05, -0.05,0.15), each = 4)
 dd_all$top <- "landscape"
